@@ -232,7 +232,7 @@ else:
         # =========================================================
         elif solver_choice == "线性规划解法（单纯形法）":
             st.write("---")
-            st.markdown("####线性规划模型构建与求解器研判")
+            st.markdown("#### 线性规划模型构建与求解器研判")
            
             col_mod1, col_mod2 = st.columns(2)
             x_var = "s" if is_textbook_matrix else "p^\\prime"
