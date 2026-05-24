@@ -145,7 +145,16 @@ for i in range(red_rows):
 has_saddle = len(saddle_points) > 0
 
 if has_saddle:
-    st.success(f" 检验结论：找到纯策略鞍点！")
+    # 套上状态绑定的动态 key 隔离容器，防止前端 React 渲染报错
+    saddle_key = f"saddle_zone_{rows}_{cols}_{len(saddle_points)}"
+    with st.container(key=saddle_key):
+        st.info(" 存在纯策略纳什均衡，直接锁定均衡点。")
+        st.markdown("#### 🎯 纯策略鞍点详细信息")
+        for idx, (r, c, val) in enumerate(saddle_points):
+            # 获取在原始矩阵中对应的真实策略编号
+            orig_r = remaining_rows[r] + 1
+            orig_c = remaining_cols[c] + 1
+            st.success(f"**鞍点 {idx + 1}**：局中人 X 选择 **X{orig_r}**，局中人 Y 选择 **Y{orig_c}** ➔ **博弈值 $V = {val:.2f}$**")
 else:
     st.warning(f" 检验结论：该矩阵中**没有纯策略鞍点**。")
     st.markdown(f"> **判定依据：** $Max-Min ({max_min}) \\neq Min-Max ({min_max})$，转入混合策略求解。")
