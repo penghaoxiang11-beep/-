@@ -208,7 +208,7 @@ else:
             with col_eq1:
                 st.markdown("**求解局中人 X 的概率分配**")
                 st.write("设局中人 X 采取各策略的概率为 " + ", ".join([f"$p_{r+1}$" for r in remaining_rows]) + "。")
-                st.write("X 的期望收益方程为：")
+                st.write("**X 的期望收益方程为：**")
                 for c_idx, c_orig in enumerate(remaining_cols):
                     terms = [f"{reduced_matrix[r_idx, c_idx]:.1f}p_{r_orig+1}" for r_idx, r_orig in enumerate(remaining_rows)]
                     st.latex(f"E(X, Y_{c_orig+1}) = " + " + ".join(terms) + " = V")
@@ -219,7 +219,7 @@ else:
             with col_eq2:
                 st.markdown("**求解局中人 Y 的概率分配**")
                 st.write("设局中人 Y 采取各策略的概率为 " + ", ".join([f"$q_{c+1}$" for c in remaining_cols]) + "。")
-                st.write("Y 的期望损失（X的收益）方程为：")
+                st.write("**Y 的期望损失（X的收益）方程为：**")
                 for r_idx, r_orig in enumerate(remaining_rows):
                     terms = [f"{reduced_matrix[r_idx, c_idx]:.1f}q_{c_orig+1}" for c_idx, c_orig in enumerate(remaining_cols)]
                     st.latex(f"E(X_{r_orig+1}, Y) = " + " + ".join(terms) + " = V")
@@ -232,7 +232,7 @@ else:
         # =========================================================
         elif solver_choice == "线性规划解法（单纯形法）":
             st.write("---")
-            st.markdown("###线性规划模型构建与求解器研判")
+            st.markdown("####线性规划模型构建与求解器研判")
            
             col_mod1, col_mod2 = st.columns(2)
             x_var = "s" if is_textbook_matrix else "p^\\prime"
