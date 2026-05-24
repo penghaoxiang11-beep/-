@@ -6,8 +6,7 @@ from scipy.optimize import linprog
 st.set_page_config(page_title="博弈论全功能计算器", layout="centered")
 
 # --- 在最前端加入署名 ---
-st.title(" 矩阵对策综合求解计算器")
-st.caption("✨ **专硕39-彭浩翔 制**") 
+st.title(" 矩阵对策综合求解计算器（专硕39-彭浩翔 制）")
 st.write("---")
 
 st.markdown("系统将严格按照以下顺序，分步求解：\n**1. 优势简化** ➔ **2. 纯策略鞍点检验** ➔ **3. 混合策略求解**")
