@@ -165,7 +165,7 @@ else:
     res_y_model = linprog(-np.ones(red_cols), A_ub=M_pos, b_ub=np.ones(red_rows), bounds=(0, None))
     
     if res_y_model.success:
-        # 教材经典经典 3x3 矩阵检测
+        # 教材经典 3x3 矩阵检测
         is_textbook_matrix = (np.array_equal(matrix[:3, :3], np.array([[2,0,2],[0,3,1],[1,2,1]])) 
                               and rows == 3 and cols == 3 
                               and len(remaining_rows) == 3 and len(remaining_cols) == 3)
@@ -189,15 +189,17 @@ else:
         for idx, original_col in enumerate(remaining_cols): final_q[original_col] = q_sub[idx]
 
         # =========================================================
-        # 核心分流控制 1：常规解法（展示期望方程推导流程，不放LP模型）
+        # 核心分流控制 1：常规解法（展示期望方程推推导流程，不放LP模型）
         # =========================================================
         if solver_choice == "常规解法（方程组/概率法）":
             st.markdown("**期望收益方程组推导流程**")
+            st.write("按照二人零和博弈特点，各局中人选择混合策略的原则是使自己的期望收益达到最优化，且无论对方如何选择，其期望收益均相等。")
+            
             col_eq1, col_eq2 = st.columns(2)
             with col_eq1:
-                st.markdown("求解局中人 X 的概率分配")
+                st.markdown("**求解局中人 X 的概率分配**")
                 st.write("设局中人 X 采取各策略的概率为 " + ", ".join([f"$p_{r+1}$" for r in remaining_rows]) + "。")
-                st.write("**X 的期望收益方程为：**")
+                st.write("当局中人 Y 采取不同策略时，X 的期望收益方程为：")
                 for c_idx, c_orig in enumerate(remaining_cols):
                     terms = [f"{reduced_matrix[r_idx, c_idx]:.1f}p_{r_orig+1}" for r_idx, r_orig in enumerate(remaining_rows)]
                     st.latex(f"E(X, Y_{c_orig+1}) = " + " + ".join(terms) + " = V")
@@ -206,9 +208,9 @@ else:
                     st.info(f"$p_{r_orig+1} = {fraction_str(final_p[r_orig])}$")
                     
             with col_eq2:
-                st.markdown("求解局中人 Y 的概率分配")
+                st.markdown("**求解局中人 Y 的概率分配**")
                 st.write("设局中人 Y 采取各策略的概率为 " + ", ".join([f"$q_{c+1}$" for c in remaining_cols]) + "。")
-                st.write("**Y 的期望损失（X的收益）方程为：**")
+                st.write("当局中人 X 采取不同策略时，Y 的期望损失（X的收益）方程为：")
                 for r_idx, r_orig in enumerate(remaining_rows):
                     terms = [f"{reduced_matrix[r_idx, c_idx]:.1f}q_{c_orig+1}" for c_idx, c_orig in enumerate(remaining_cols)]
                     st.latex(f"E(X_{r_orig+1}, Y) = " + " + ".join(terms) + " = V")
@@ -222,38 +224,35 @@ else:
         elif solver_choice == "线性规划解法（单纯形法）":
             st.write("---")
             st.markdown("**线性规划模型构建与求解器研判**")
-           
-            col_mod1, col_mod2 = st.columns(2)
             
-            # 动态确定 X 模型显示的变量符号名称
+
+            col_mod1, col_mod2 = st.columns(2)
             x_var = "s" if is_textbook_matrix else "p^\\prime"
             
             with col_mod1:
-                st.markdown("局中人 X 的数学模型")
-                st.latex(r"\min f(P) = " + " + ".join([f"{x_var}_{r+1}" for r in remaining_rows]))
+                st.markdown("**局中人 X 的数学模型**")
+                st.latex(r"\min \phi(P) = " + " + ".join([f"{x_var}_{r+1}" for r in remaining_rows]))
                 st.markdown("满足约束条件：")
                 for c_idx, c_orig in enumerate(remaining_cols):
                     expr = " + ".join([f"{reduced_matrix[r_idx, c_idx]:.1f}{x_var}_{r_orig+1}" for r_idx, r_orig in enumerate(remaining_rows)])
                     st.latex(f"{expr} \\ge 1")
-                
-                # 新增：变量取值非负约束提示
                 cond_vars = ", ".join([f"{x_var}_{r+1}" for r in remaining_rows])
                 st.latex(f"{cond_vars} \\ge 0")
                     
             with col_mod2:
-                st.markdown("局中人 Y 的数学模型")
+                st.markdown("**局中人 Y 的数学模型**")
                 st.latex(r"\max f(Q) = " + " + ".join([f"q^\\prime_{c+1}" for c in remaining_cols]))
                 st.markdown("满足约束条件：")
                 for r_idx, r_orig in enumerate(remaining_rows):
                     expr = " + ".join([f"{reduced_matrix[r_idx, c_idx]:.1f}q^\\prime_{c_orig+1}" for c_idx, c_orig in enumerate(remaining_cols)])
                     st.latex(f"{expr} \\le 1")
-                
-                # 新增：变量取值非负约束提示
                 cond_vars_y = ", ".join([f"q^\\prime_{c+1}" for c in remaining_cols])
                 st.latex(f"{cond_vars_y} \\ge 0")
 
             st.write("---")
             st.subheader(" 最终单纯形表 (Final Simplex Tableau)")
+            
+            # 统一表头
             headers = [f"q'_{c+1}" for c in remaining_cols] + [f"s_{r+1}" for r in remaining_rows] + ["RHS (b)"]
             
             if is_textbook_matrix:
@@ -263,7 +262,7 @@ else:
                 row_sigma = [0.0, 0.0, 0.0, -1/4, 0.0, -1/2, 3/4]
                 tableau_rows = [row1, row2, row3, row_sigma]
                 row_labels = ["q'_1", "q'_3", "q'_2", "f(Q) 检验数"]
-          else:
+            else:
                 # ====== 🌟 完美修复的通用多维对齐逻辑 🌟 ======
                 tableau_rows = []
                 # 1. 填充基变量各行
