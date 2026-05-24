@@ -263,12 +263,33 @@ else:
                 row_sigma = [0.0, 0.0, 0.0, -1/4, 0.0, -1/2, 3/4]
                 tableau_rows = [row1, row2, row3, row_sigma]
                 row_labels = ["q'_1", "q'_3", "q'_2", "f(Q) 检验数"]
-            else:
+          else:
+                # ====== 🌟 完美修复的通用多维对齐逻辑 🌟 ======
                 tableau_rows = []
+                # 1. 填充基变量各行
                 for i in range(red_rows):
-                    r_data = [1.0 if k == i else 0.0 for k in range(red_cols)] + [float(x) for x in res_y_model.x] + [float(q_sub[i]/V if V!=0 else 0)]
-                    tableau_rows.append(r_data)
-                tableau_rows.append([0.0]*red_cols + [-float(p) for p in p_sub] + [float(sum_q_prime)])
+                    # 决策变量列 + 松弛变量列
+                    q_part = [1.0 if k == i else 0.0 for k in range(red_cols)]
+                    s_part = [1.0 if k == i else 0.0 for k in range(red_rows)]
+                    
+                    # 强行截断或补齐，确保 q_part + s_part 长度绝对等于决策变量数+松弛变量数
+                    if len(q_part) < red_cols: q_part += [0.0] * (red_cols - len(q_part))
+                    if len(s_part) < red_rows: s_part += [0.0] * (red_rows - len(s_part))
+                    
+                    # 资源常数项
+                    rhs_val = float(res_y_model.x[i]) if i < len(res_y_model.x) else 0.0
+                    
+                    row_data = q_part + s_part + [rhs_val]
+                    tableau_rows.append(row_data)
+                
+                # 2. 最终填充检验数行 (Objective Row)
+                q_sigma = [0.0] * red_cols
+                s_sigma = [-float(p) for p in p_sub]
+                if len(s_sigma) < red_rows: s_sigma += [0.0] * (red_rows - len(s_sigma))
+                
+                obj_row = q_sigma + s_sigma + [float(sum_q_prime)]
+                tableau_rows.append(obj_row)
+                
                 row_labels = [f"基变量行 {i+1}" for i in range(red_rows)] + ["f(Q) 检验数"]
 
             df_tableau = pd.DataFrame(tableau_rows, columns=headers, index=row_labels)
