@@ -149,7 +149,7 @@ if has_saddle:
     saddle_key = f"saddle_zone_{rows}_{cols}_{len(saddle_points)}"
     with st.container(key=saddle_key):
         st.info(" 存在纯策略纳什均衡，直接锁定均衡点。")
-        st.markdown("####纯策略鞍点详细信息")
+        st.markdown("**纯策略鞍点详细信息**")
         for idx, (r, c, val) in enumerate(saddle_points):
             # 获取在原始矩阵中对应的真实策略编号
             orig_r = remaining_rows[r] + 1
