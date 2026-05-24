@@ -115,7 +115,7 @@ if "不进行化简" not in simplify_method:
 reduced_matrix = matrix[np.ix_(remaining_rows, remaining_cols)]
 
 if "不进行化简" in simplify_method:
-    st.info("💡 **矩阵诊断结论**：您选择了不进行化简，保持原矩阵进入后续计算。")
+    st.info("**矩阵诊断结论**：您选择了不进行化简，保持原矩阵进入后续计算。")
 elif history_log:
     for log in history_log:
         st.markdown(log)
@@ -192,14 +192,14 @@ else:
         # 核心分流控制 1：常规解法（展示期望方程推推导流程，不放LP模型）
         # =========================================================
         if solver_choice == "常规解法（方程组/概率法）":
-            st.markdown("#### 📝 期望收益方程组推导流程")
+            st.markdown("####  期望收益方程组推导流程")
             st.write("按照二人零和博弈特点，各局中人选择混合策略的原则是使自己的期望收益达到最优化，且无论对方如何选择，其期望收益均相等。")
             
             col_eq1, col_eq2 = st.columns(2)
             with col_eq1:
-                st.markdown("##### 🔹 求解局中人 X 的概率分配")
+                st.markdown("**求解局中人 X 的概率分配**")
                 st.write("设局中人 X 采取各策略的概率为 " + ", ".join([f"$p_{r+1}$" for r in remaining_rows]) + "。")
-                st.write("当局中人 Y 采取不同策略时，X 的期望收益方程为：")
+                st.write("X 的期望收益方程为：")
                 for c_idx, c_orig in enumerate(remaining_cols):
                     terms = [f"{reduced_matrix[r_idx, c_idx]:.1f}p_{r_orig+1}" for r_idx, r_orig in enumerate(remaining_rows)]
                     st.latex(f"E(X, Y_{c_orig+1}) = " + " + ".join(terms) + " = V")
@@ -208,9 +208,9 @@ else:
                     st.info(f"$p_{r_orig+1} = {fraction_str(final_p[r_orig])}$")
                     
             with col_eq2:
-                st.markdown("##### 🔹 求解局中人 Y 的概率分配")
+                st.markdown("**求解局中人 Y 的概率分配**")
                 st.write("设局中人 Y 采取各策略的概率为 " + ", ".join([f"$q_{c+1}$" for c in remaining_cols]) + "。")
-                st.write("当局中人 X 采取不同策略时，Y 的期望损失（X的收益）方程为：")
+                st.write("Y 的期望损失（X的收益）方程为：")
                 for r_idx, r_orig in enumerate(remaining_rows):
                     terms = [f"{reduced_matrix[r_idx, c_idx]:.1f}q_{c_orig+1}" for c_idx, c_orig in enumerate(remaining_cols)]
                     st.latex(f"E(X_{r_orig+1}, Y) = " + " + ".join(terms) + " = V")
@@ -223,19 +223,13 @@ else:
         # =========================================================
         elif solver_choice == "线性规划解法（单纯形法）":
             st.write("---")
-            st.markdown("### 📋 线性规划模型构建与求解器研判")
-            st.info("""
-            **💡 运筹学建模诊断结论：**
-            * **局中人 Y 的模型**（约束条件全部为 $\le 1$）：只需要引入**松弛变量**即可直接构成初始可行基。**由于没有加入人工变量**，计算过程极其简便，因此系统和教材一致选择**优先求解局中人 Y 的模型**！
-            * **局中人 X 的模型**（约束条件为 $\ge 1$）：若要直接求解，必须引入**人工变量**（需使用大M法或两阶段法），计算极其繁琐。
-            """)
-
+            st.markdown("###线性规划模型构建与求解器研判")
+           
             col_mod1, col_mod2 = st.columns(2)
             x_var = "s" if is_textbook_matrix else "p^\\prime"
             
             with col_mod1:
-                st.markdown("#### 🔹 局中人 X 的数学模型 (对偶问题)")
-                st.markdown("需引入人工变量，计算较繁琐：")
+                st.markdown("**局中人 X 的数学模型**")
                 st.latex(r"\min \phi(P) = " + " + ".join([f"{x_var}_{r+1}" for r in remaining_rows]))
                 st.markdown("满足约束条件：")
                 for c_idx, c_orig in enumerate(remaining_cols):
@@ -245,8 +239,7 @@ else:
                 st.latex(f"{cond_vars} \\ge 0")
                     
             with col_mod2:
-                st.markdown("#### 🔹 局中人 Y 的数学模型 (原始问题)")
-                st.markdown("**未加入人工变量，直接加入松弛变量求解（推荐）：**")
+                st.markdown("**局中人 Y 的数学模型**")
                 st.latex(r"\max f(Q) = " + " + ".join([f"q^\\prime_{c+1}" for c in remaining_cols]))
                 st.markdown("满足约束条件：")
                 for r_idx, r_orig in enumerate(remaining_rows):
