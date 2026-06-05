@@ -143,8 +143,9 @@ def page_optimal_pure(matrix):
     has_saddle, saddles, max_min, min_max = saddle_point_analysis(matrix)
 
     st.markdown("#### 鞍点检验")
-    st.latex(f"\\text{Max-Min} = \\max_i \\min_j a_{{ij}} = {max_min:.2f}")
-    st.latex(f"\\text{Min-Max} = \\min_j \\max_i a_{{ij}} = {min_max:.2f}")
+    # 修正 f-string 中的大括号转义：需要输出字面大括号的地方使用双大括号
+    st.latex(f"\\text{{Max-Min}} = \\max_i \\min_j a_{{ij}} = {max_min:.2f}")
+    st.latex(f"\\text{{Min-Max}} = \\min_j \\max_i a_{{ij}} = {min_max:.2f}")
 
     if has_saddle:
         st.success("存在纯策略纳什均衡（鞍点）")
@@ -174,16 +175,16 @@ def page_mixed_strategy(matrix):
         st.markdown("**X 的概率求解 (令 Y 的每个纯策略下 X 的期望收益相等)**")
         for j in range(cols):
             terms = [f"{matrix[i, j]:.1f}{x_vars[i]}" for i in range(rows)]
-            st.latex("E(Y_{" + f"{j+1}" + "}) = " + " + ".join(terms) + " = V")
-        st.write("结合 $\\sum " + " + ".join(x_vars) + " = 1$ 解得：")
+            st.latex(f"E(Y_{{{j+1}}}) = " + " + ".join(terms) + " = V")
+        st.write(f"结合 $\\sum " + " + ".join(x_vars) + " = 1$ 解得：")
         for i in range(rows):
             st.info(f"{x_vars[i]} = {fraction_str(p_sub[i])}")
     with col2:
         st.markdown("**Y 的概率求解 (令 X 的每个纯策略下 Y 的期望损失相等)**")
         for i in range(rows):
             terms = [f"{matrix[i, j]:.1f}{y_vars[j]}" for j in range(cols)]
-            st.latex("E(X_{" + f"{i+1}" + "}) = " + " + ".join(terms) + " = V")
-        st.write("结合 $\\sum " + " + ".join(y_vars) + " = 1$ 解得：")
+            st.latex(f"E(X_{{{i+1}}}) = " + " + ".join(terms) + " = V")
+        st.write(f"结合 $\\sum " + " + ".join(y_vars) + " = 1$ 解得：")
         for j in range(cols):
             st.info(f"{y_vars[j]} = {fraction_str(q_sub[j])}")
 
@@ -251,7 +252,6 @@ def page_linear_programming(matrix):
     st.subheader("最终单纯形表 (Final Simplex Tableau)")
 
     # 构造最终单纯形表（标准最大化问题，添加松弛变量）
-    # 表头：决策变量 q'_j + 松弛变量 s_i + RHS
     headers = [f"q'_{j+1}" for j in range(cols)] + [f"s_{i+1}" for i in range(rows)] + ["RHS"]
 
     if is_textbook:
@@ -263,33 +263,22 @@ def page_linear_programming(matrix):
         tableau_data = [row1, row2, row3, row_sigma]
         row_labels = ["q'_1", "q'_3", "q'_2", "检验数"]
     else:
-        # 通用构造：基于最终解，基变量为松弛变量（假设对偶问题最优解基变量为松弛变量）
-        # 此处构造一个近似最终单纯形表，展示结果
+        # 通用构造：基于最终解，展示一个示例单纯形表（实际可优化）
         tableau_rows = []
-        # 基变量行（松弛变量）
+        # 假设基变量为松弛变量，系数矩阵为 A
         for i in range(rows):
-            q_part = [matrix[i, j] for j in range(cols)]  # 系数矩阵 A 的行
+            q_part = [matrix[i, j] for j in range(cols)]
             s_part = [1.0 if k == i else 0.0 for k in range(rows)]
-            rhs_val = 1.0  # 右端项为1
+            rhs_val = 1.0
             tableau_rows.append(q_part + s_part + [rhs_val])
-        # 检验数行：c_j - sum(c_B * a_j)
-        # 目标函数系数：对于 q' 为 1，松弛变量为 0
-        c_B = np.zeros(rows)  # 基变量在目标中的系数（松弛变量系数为0）
-        sigma_q = [1.0 - np.dot(c_B, [tableau_rows[k][j] for k in range(rows)]) for j in range(cols)]
-        sigma_s = [0.0 - np.dot(c_B, [tableau_rows[k][cols+j] for k in range(rows)]) for j in range(rows)]
-        sigma_rhs = 0.0 - np.dot(c_B, [tableau_rows[k][-1] for k in range(rows)])
-        obj_row = sigma_q + sigma_s + [sigma_rhs]
+        # 检验数行：c_j - sum(c_B * a_j)，c_B 全为0（松弛变量在目标中系数为0）
+        sigma_q = [1.0] * cols
+        sigma_s = [0.0] * rows
+        # 目标函数值 = sum_q_prime
+        obj_val = 1.0 / (V + 1e-6) if V != 0 else 1.0
+        obj_row = sigma_q + sigma_s + [obj_val]
         tableau_rows.append(obj_row)
         row_labels = [f"s_{i+1} (基变量)" for i in range(rows)] + ["检验数"]
-
-        # 将当前基变量解填入RHS（实际应为当前基变量值，这里简化）
-        # 为了让表格更真实，将松弛变量值设为对偶问题的最优解值？
-        # 简单起见，直接展示上述构造，用户可理解
-        for i in range(rows):
-            tableau_rows[i][-1] = 1.0  # 实际上应为b_i = 1
-        # 检验数行RHS应为目标函数值 = sum_q_prime
-        tableau_rows[-1][-1] = 1.0 / (V + 1e-6) if V != 0 else 1.0
-
         tableau_data = tableau_rows
 
     df_tableau = pd.DataFrame(tableau_data, columns=headers, index=row_labels)
@@ -337,7 +326,7 @@ def main():
                 elif i == 1 and j == 0: default_val = 3
                 elif i == 1 and j == 1: default_val = 4
             with row_cells[j]:
-                val = st.number_input(f"a[{i+1},{j+1}]", value=default_val, key=f"mat_{i}_{j}")
+                val = st.number_input(f"a[{i+1},{j+1}]", value=default_val, key=f"mat_{i}_{j}_{rows}_{cols}")
                 row_vals.append(val)
         matrix_data.append(row_vals)
     original_matrix = np.array(matrix_data)
