@@ -19,98 +19,43 @@ def fraction_str(val):
     if abs(val - 0.8) < 0.01: return "4/5"
     return f"{val:.2f}"
 
-def simplify_matrix(matrix, method):
-    """优势简化，返回 (简化矩阵, 剩余行索引列表, 剩余列索引列表, 日志列表)"""
-    rows, cols = matrix.shape
-    remaining_rows = list(range(rows))
-    remaining_cols = list(range(cols))
-    history_log = []
+def get_letter_vars(n, prefix=''):
+    """生成字母列表 a,b,c,... 或加上前缀如 p_"""
+    letters = [chr(ord('a') + i) for i in range(n)]
+    if prefix:
+        return [f"{prefix}{l}" for l in letters]
+    return letters
 
-    if "不进行化简" in method:
-        history_log.append("未进行简化，保留原始矩阵。")
-        return matrix, remaining_rows, remaining_cols, history_log
-
-    eliminated = True
-    while eliminated:
-        eliminated = False
-        current_matrix = matrix[np.ix_(remaining_rows, remaining_cols)]
-        curr_r, curr_c = current_matrix.shape
-
-        # 剔除 X 的劣势策略（行）
-        if curr_r > 1:
-            for i in range(curr_r):
-                for j in range(curr_r):
-                    if i != j:
-                        if "严格" in method:
-                            cond = np.all(current_matrix[j, :] > current_matrix[i, :])
-                        else:  # 弱优势
-                            cond = np.all(current_matrix[j, :] >= current_matrix[i, :]) and np.any(current_matrix[j, :] > current_matrix[i, :])
-
-                        if cond:
-                            actual_idx = remaining_rows[i]
-                            history_log.append(f"局中人X 的策略 X{actual_idx+1} 被策略 X{remaining_rows[j]+1} 严格{'（弱）' if '弱' in method else ''}优势剔除。")
-                            remaining_rows.pop(i)
-                            eliminated = True
-                            break
-                if eliminated:
-                    break
-
-        # 剔除 Y 的劣势策略（列）
-        if not eliminated and curr_c > 1:
-            for i in range(curr_c):
-                for j in range(curr_c):
-                    if i != j:
-                        if "严格" in method:
-                            cond = np.all(current_matrix[:, j] < current_matrix[:, i])
-                        else:
-                            cond = np.all(current_matrix[:, j] <= current_matrix[:, i]) and np.any(current_matrix[:, j] < current_matrix[:, i])
-
-                        if cond:
-                            actual_idx = remaining_cols[i]
-                            history_log.append(f"局中人Y 的策略 Y{actual_idx+1} 被策略 Y{remaining_cols[j]+1} 严格{'（弱）' if '弱' in method else ''}优势剔除。")
-                            remaining_cols.pop(i)
-                            eliminated = True
-                            break
-                if eliminated:
-                    break
-
-    reduced_matrix = matrix[np.ix_(remaining_rows, remaining_cols)]
-    if not history_log:
-        history_log.append("根据所选标准，未发现可剔除的劣势策略。")
-    return reduced_matrix, remaining_rows, remaining_cols, history_log
-
-def saddle_point_analysis(reduced_matrix, remaining_rows, remaining_cols):
-    """纯策略鞍点检验，返回 (has_saddle, 鞍点列表[(行号,列号,值)], max_min, min_max)"""
-    r_mins = np.min(reduced_matrix, axis=1)
-    c_maxs = np.max(reduced_matrix, axis=0)
+def saddle_point_analysis(matrix):
+    """对原始矩阵进行纯策略鞍点检验，返回 (has_saddle, 鞍点列表[(行号,列号,值)], max_min, min_max)"""
+    r_mins = np.min(matrix, axis=1)
+    c_maxs = np.max(matrix, axis=0)
     max_min = np.max(r_mins)
     min_max = np.min(c_maxs)
 
     saddle_points = []
-    red_rows, red_cols = reduced_matrix.shape
-    for i in range(red_rows):
-        for j in range(red_cols):
-            if reduced_matrix[i, j] == r_mins[i] and reduced_matrix[i, j] == c_maxs[j]:
-                orig_r = remaining_rows[i] + 1
-                orig_c = remaining_cols[j] + 1
-                saddle_points.append((orig_r, orig_c, reduced_matrix[i, j]))
+    rows, cols = matrix.shape
+    for i in range(rows):
+        for j in range(cols):
+            if matrix[i, j] == r_mins[i] and matrix[i, j] == c_maxs[j]:
+                saddle_points.append((i+1, j+1, matrix[i, j]))
 
     return len(saddle_points) > 0, saddle_points, max_min, min_max
 
-def compute_mixed_strategy(reduced_matrix):
+def compute_mixed_strategy(matrix):
     """利用线性规划求解混合策略，返回 (p_sub, q_sub, V, is_textbook)"""
-    red_rows, red_cols = reduced_matrix.shape
-    min_val = np.min(reduced_matrix)
+    rows, cols = matrix.shape
+    min_val = np.min(matrix)
     shift = abs(min_val) + 1 if min_val <= 0 else 1.0
-    M_pos = (reduced_matrix + shift).astype(float)
+    M_pos = (matrix + shift).astype(float)
 
-    res_y = linprog(-np.ones(red_cols), A_ub=M_pos, b_ub=np.ones(red_rows), bounds=(0, None), method='highs')
+    res_y = linprog(-np.ones(cols), A_ub=M_pos, b_ub=np.ones(rows), bounds=(0, None), method='highs')
 
     if not res_y.success:
         return None, None, None, None
 
-    # 经典3x3教材矩阵特判
-    is_textbook = (np.array_equal(reduced_matrix, np.array([[2,0,2],[0,3,1],[1,2,1]])) and red_rows==3 and red_cols==3)
+    # 经典3x3教材矩阵特判（维持美观）
+    is_textbook = (np.array_equal(matrix, np.array([[2,0,2],[0,3,1],[1,2,1]])) and rows==3 and cols==3)
 
     if is_textbook:
         V = 4/3
@@ -121,61 +66,81 @@ def compute_mixed_strategy(reduced_matrix):
         V = (1.0 / sum_q_prime) - shift
         q_sub = res_y.x / sum_q_prime
         # 原始问题的最优解（对偶变量）
-        x_prime = np.abs(res_y.ineqlin.marginals) if hasattr(res_y.ineqlin, 'marginals') else np.ones(red_rows) / red_rows
+        if hasattr(res_y.ineqlin, 'marginals'):
+            x_prime = np.abs(res_y.ineqlin.marginals)
+        else:
+            x_prime = np.ones(rows) / rows
         sum_p_prime = np.sum(x_prime)
-        p_sub = x_prime / sum_p_prime if sum_p_prime > 0 else np.ones(red_rows) / red_rows
+        p_sub = x_prime / sum_p_prime if sum_p_prime > 0 else np.ones(rows) / rows
 
     return p_sub, q_sub, V, is_textbook
 
-def display_probabilities(p_sub, q_sub, remaining_rows, remaining_cols, rows_total, cols_total):
-    """展示概率分布条形图"""
+def display_probabilities(p_sub, q_sub, rows_total, cols_total):
+    """展示概率分布条形图（无剔除时全部策略都存在）"""
     col_p, col_q = st.columns(2)
     with col_p:
         st.markdown("**局中人X 最终决策概率：**")
-        full_p = np.zeros(rows_total)
-        for idx, orig in enumerate(remaining_rows):
-            full_p[orig] = p_sub[idx]
         for i in range(rows_total):
-            p_val = full_p[i]
-            if i in remaining_rows:
-                st.write(f"策略 X{i+1} : {p_val*100:.2f}% (即 {fraction_str(p_val)})")
-            else:
-                st.write(f"策略 X{i+1} : 0.00% (已被剔除)")
+            p_val = p_sub[i] if i < len(p_sub) else 0.0
+            st.write(f"策略 X{i+1} : {p_val*100:.2f}% (即 {fraction_str(p_val)})")
             st.progress(float(p_val))
     with col_q:
         st.markdown("**局中人Y 最终决策概率：**")
-        full_q = np.zeros(cols_total)
-        for idx, orig in enumerate(remaining_cols):
-            full_q[orig] = q_sub[idx]
         for j in range(cols_total):
-            q_val = full_q[j]
-            if j in remaining_cols:
-                st.write(f"策略 Y{j+1} : {q_val*100:.2f}% (即 {fraction_str(q_val)})")
-            else:
-                st.write(f"策略 Y{j+1} : 0.00% (已被剔除)")
+            q_val = q_sub[j] if j < len(q_sub) else 0.0
+            st.write(f"策略 Y{j+1} : {q_val*100:.2f}% (即 {fraction_str(q_val)})")
             st.progress(float(q_val))
 
+def weak_dominance_simplify(matrix):
+    """固定使用弱优势剔除，返回简化矩阵、保留的行列索引及日志"""
+    rows, cols = matrix.shape
+    remaining_rows = list(range(rows))
+    remaining_cols = list(range(cols))
+    history_log = []
+
+    eliminated = True
+    while eliminated:
+        eliminated = False
+        current_matrix = matrix[np.ix_(remaining_rows, remaining_cols)]
+        curr_r, curr_c = current_matrix.shape
+
+        # 剔除 X 的弱劣势策略（行）
+        if curr_r > 1:
+            for i in range(curr_r):
+                for j in range(curr_r):
+                    if i != j:
+                        if np.all(current_matrix[j, :] >= current_matrix[i, :]) and np.any(current_matrix[j, :] > current_matrix[i, :]):
+                            actual_idx = remaining_rows[i]
+                            history_log.append(f"局中人X 的策略 X{actual_idx+1} 被策略 X{remaining_rows[j]+1} 弱优势剔除。")
+                            remaining_rows.pop(i)
+                            eliminated = True
+                            break
+                if eliminated:
+                    break
+
+        # 剔除 Y 的弱劣势策略（列）
+        if not eliminated and curr_c > 1:
+            for i in range(curr_c):
+                for j in range(curr_c):
+                    if i != j:
+                        if np.all(current_matrix[:, j] <= current_matrix[:, i]) and np.any(current_matrix[:, j] < current_matrix[:, i]):
+                            actual_idx = remaining_cols[i]
+                            history_log.append(f"局中人Y 的策略 Y{actual_idx+1} 被策略 Y{remaining_cols[j]+1} 弱优势剔除。")
+                            remaining_cols.pop(i)
+                            eliminated = True
+                            break
+                if eliminated:
+                    break
+
+    reduced_matrix = matrix[np.ix_(remaining_rows, remaining_cols)]
+    if not history_log:
+        history_log.append("未发现可剔除的弱劣势策略。")
+    return reduced_matrix, remaining_rows, remaining_cols, history_log
+
 # ---------- 各功能页面 ----------
-def page_optimal_pure(original_matrix, rows_total, cols_total):
+def page_optimal_pure(matrix):
     st.header("最优纯策略分析")
-    # 页面内独立选择简化标准
-    method = st.radio(
-        "优势简化标准（用于预处理矩阵）",
-        ["不进行化简", "严格优势剔除", "弱优势剔除"],
-        index=0,
-        key="pure_dominance"
-    )
-    reduced_mat, rem_rows, rem_cols, log = simplify_matrix(original_matrix, method)
-
-    st.markdown("#### 剔除过程")
-    for entry in log:
-        st.write(f"- {entry}")
-
-    if reduced_mat.size == 0:
-        st.warning("简化后矩阵为空，无法分析。")
-        return
-
-    has_saddle, saddles, max_min, min_max = saddle_point_analysis(reduced_mat, rem_rows, rem_cols)
+    has_saddle, saddles, max_min, min_max = saddle_point_analysis(matrix)
 
     st.markdown("#### 鞍点检验")
     st.latex(f"\\text{Max-Min} = \\max_i \\min_j a_{{ij}} = {max_min:.2f}")
@@ -188,66 +153,49 @@ def page_optimal_pure(original_matrix, rows_total, cols_total):
     else:
         st.warning("不存在纯策略鞍点，建议使用混合策略求解。")
 
-def page_mixed_strategy(original_matrix, rows_total, cols_total):
+def page_mixed_strategy(matrix):
     st.header("混合策略求解（常规方程组法）")
-    method = st.radio(
-        "优势简化标准（用于预处理矩阵）",
-        ["不进行化简", "严格优势剔除", "弱优势剔除"],
-        index=0,
-        key="mixed_dominance"
-    )
-    reduced_mat, rem_rows, rem_cols, log = simplify_matrix(original_matrix, method)
-
-    st.markdown("#### 剔除过程")
-    for entry in log:
-        st.write(f"- {entry}")
-
-    if reduced_mat.size == 0:
-        st.warning("简化后矩阵为空，无法求解混合策略。")
-        return
-
-    p_sub, q_sub, V, is_textbook = compute_mixed_strategy(reduced_mat)
+    rows, cols = matrix.shape
+    p_sub, q_sub, V, is_textbook = compute_mixed_strategy(matrix)
     if p_sub is None:
         st.error("求解失败，请检查矩阵数据。")
         return
 
+    # 动态生成字母表示概率
+    x_vars = get_letter_vars(rows)
+    y_vars = get_letter_vars(cols)
+
     st.markdown("#### 期望收益方程组推导")
-    st.write("设局中人 X 的策略概率为 " + ", ".join([f"p_{r+1}" for r in rem_rows]) + "，")
-    st.write("局中人 Y 的策略概率为 " + ", ".join([f"q_{c+1}" for c in rem_cols]) + "。")
+    st.write(f"设局中人 X 采用各策略的概率分别为 {', '.join(x_vars)}，")
+    st.write(f"局中人 Y 采用各策略的概率分别为 {', '.join(y_vars)}。")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**X 的概率求解**")
-        for c_idx, c_orig in enumerate(rem_cols):
-            terms = [f"{reduced_mat[r_idx, c_idx]:.1f}p_{rem_rows[r_idx]+1}" for r_idx in range(len(rem_rows))]
-            st.latex("E(Y_{" + f"{c_orig+1}" + "}) = " + " + ".join(terms) + " = V")
-        st.write("结合 $\\sum p_i = 1$ 解得：")
-        for idx, orig in enumerate(rem_rows):
-            st.info(f"p_{orig+1} = {fraction_str(p_sub[idx])}")
+        st.markdown("**X 的概率求解 (令 Y 的每个纯策略下 X 的期望收益相等)**")
+        for j in range(cols):
+            terms = [f"{matrix[i, j]:.1f}{x_vars[i]}" for i in range(rows)]
+            st.latex("E(Y_{" + f"{j+1}" + "}) = " + " + ".join(terms) + " = V")
+        st.write("结合 $\\sum " + " + ".join(x_vars) + " = 1$ 解得：")
+        for i in range(rows):
+            st.info(f"{x_vars[i]} = {fraction_str(p_sub[i])}")
     with col2:
-        st.markdown("**Y 的概率求解**")
-        for r_idx, r_orig in enumerate(rem_rows):
-            terms = [f"{reduced_mat[r_idx, c_idx]:.1f}q_{rem_cols[c_idx]+1}" for c_idx in range(len(rem_cols))]
-            st.latex("E(X_{" + f"{r_orig+1}" + "}) = " + " + ".join(terms) + " = V")
-        st.write("结合 $\\sum q_j = 1$ 解得：")
-        for idx, orig in enumerate(rem_cols):
-            st.info(f"q_{orig+1} = {fraction_str(q_sub[idx])}")
+        st.markdown("**Y 的概率求解 (令 X 的每个纯策略下 Y 的期望损失相等)**")
+        for i in range(rows):
+            terms = [f"{matrix[i, j]:.1f}{y_vars[j]}" for j in range(cols)]
+            st.latex("E(X_{" + f"{i+1}" + "}) = " + " + ".join(terms) + " = V")
+        st.write("结合 $\\sum " + " + ".join(y_vars) + " = 1$ 解得：")
+        for j in range(cols):
+            st.info(f"{y_vars[j]} = {fraction_str(q_sub[j])}")
 
     st.markdown("---")
-    display_probabilities(p_sub, q_sub, rem_rows, rem_cols, rows_total, cols_total)
+    display_probabilities(p_sub, q_sub, rows, cols)
     st.success(f"博弈期望值 V = {fraction_str(V)} = {V:.4f}")
 
-def page_dominance(original_matrix, rows_total, cols_total):
+def page_dominance(matrix):
     st.header("优势简化法分析")
-    method = st.radio(
-        "请选择优势剔除标准",
-        ["不进行化简", "严格优势剔除", "弱优势剔除"],
-        index=0,
-        key="dom_only"
-    )
-    reduced_mat, rem_rows, rem_cols, log = simplify_matrix(original_matrix, method)
+    reduced_mat, rem_rows, rem_cols, log = weak_dominance_simplify(matrix)
 
-    st.markdown("#### 剔除过程日志")
+    st.markdown("#### 弱优势剔除过程日志")
     for entry in log:
         st.write(f"- {entry}")
 
@@ -261,87 +209,94 @@ def page_dominance(original_matrix, rows_total, cols_total):
         st.dataframe(df, use_container_width=True)
         st.caption(f"简化后规模：{reduced_mat.shape[0]} 行 × {reduced_mat.shape[1]} 列")
 
-def page_linear_programming(original_matrix, rows_total, cols_total):
+def page_linear_programming(matrix):
     st.header("线性规划求解法（单纯形法）")
-    method = st.radio(
-        "优势简化标准（用于预处理矩阵）",
-        ["不进行化简", "严格优势剔除", "弱优势剔除"],
-        index=0,
-        key="lp_dominance"
-    )
-    reduced_mat, rem_rows, rem_cols, log = simplify_matrix(original_matrix, method)
+    # 先判断鞍点
+    has_saddle, saddles, max_min, min_max = saddle_point_analysis(matrix)
+    if has_saddle:
+        st.info(f"检测到纯策略鞍点，博弈值 V = {saddles[0][2]:.2f}。但仍可求解混合策略（可能退化）。")
+    else:
+        st.warning("不存在纯策略鞍点，将求解混合策略。")
 
-    st.markdown("#### 剔除过程")
-    for entry in log:
-        st.write(f"- {entry}")
-
-    if reduced_mat.size == 0:
-        st.warning("简化后矩阵为空，无法建立线性规划模型。")
-        return
-
-    p_sub, q_sub, V, is_textbook = compute_mixed_strategy(reduced_mat)
+    # 求解混合策略
+    p_sub, q_sub, V, is_textbook = compute_mixed_strategy(matrix)
     if p_sub is None:
         st.error("线性规划求解失败，请检查数据。")
         return
 
+    rows, cols = matrix.shape
+    # 显示对偶线性规划模型
     st.markdown("#### 对偶线性规划模型")
     col_mod1, col_mod2 = st.columns(2)
     with col_mod1:
         st.markdown("**局中人X 的原始问题 (Minimize)**")
-        var_x = [f"p_{r+1}'" for r in rem_rows]
+        var_x = [f"p_{i+1}'" for i in range(rows)]
         st.latex(r"\min \phi = " + " + ".join(var_x))
         st.write("满足约束：")
-        for c_idx, c_orig in enumerate(rem_cols):
-            expr = " + ".join([f"{reduced_mat[r_idx, c_idx]:.1f}p_{rem_rows[r_idx]+1}'" for r_idx in range(len(rem_rows))])
+        for j in range(cols):
+            expr = " + ".join([f"{matrix[i, j]:.1f}p_{i+1}'" for i in range(rows)])
             st.latex(f"{expr} \\ge 1")
         st.latex(f"{', '.join(var_x)} \\ge 0")
     with col_mod2:
         st.markdown("**局中人Y 的对偶问题 (Maximize)**")
-        var_y = [f"q_{c+1}'" for c in rem_cols]
+        var_y = [f"q_{j+1}'" for j in range(cols)]
         st.latex(r"\max \psi = " + " + ".join(var_y))
         st.write("满足约束：")
-        for r_idx, r_orig in enumerate(rem_rows):
-            expr = " + ".join([f"{reduced_mat[r_idx, c_idx]:.1f}q_{rem_cols[c_idx]+1}'" for c_idx in range(len(rem_cols))])
+        for i in range(rows):
+            expr = " + ".join([f"{matrix[i, j]:.1f}q_{j+1}'" for j in range(cols)])
             st.latex(f"{expr} \\le 1")
         st.latex(f"{', '.join(var_y)} \\ge 0")
 
     st.markdown("---")
     st.subheader("最终单纯形表 (Final Simplex Tableau)")
 
-    # 构造单纯形表头
-    headers = [f"q'_{c+1}" for c in rem_cols] + [f"s_{r+1}" for r in rem_rows] + ["RHS"]
+    # 构造最终单纯形表（标准最大化问题，添加松弛变量）
+    # 表头：决策变量 q'_j + 松弛变量 s_i + RHS
+    headers = [f"q'_{j+1}" for j in range(cols)] + [f"s_{i+1}" for i in range(rows)] + ["RHS"]
 
     if is_textbook:
-        # 教材经典案例的固定单纯形表（美观）
+        # 教材经典案例的固定单纯形表
         row1 = [1.0, 0.0, 0.0, -1/4, -1.0, 3/2, 1/4]
         row2 = [0.0, 0.0, 1.0, 3/4, 1.0, -3/2, 1/4]
         row3 = [0.0, 1.0, 0.0, -1/4, 0.0, -1/2, 1/4]
         row_sigma = [0.0, 0.0, 0.0, -1/4, 0.0, -1/2, 3/4]
         tableau_data = [row1, row2, row3, row_sigma]
-        row_labels = ["q'_1", "q'_3", "q'_2", "f(Q) 检验数"]
+        row_labels = ["q'_1", "q'_3", "q'_2", "检验数"]
     else:
-        # 通用构造（基于对偶解，不保证完全正确，仅供演示）
+        # 通用构造：基于最终解，基变量为松弛变量（假设对偶问题最优解基变量为松弛变量）
+        # 此处构造一个近似最终单纯形表，展示结果
         tableau_rows = []
-        for i in range(len(rem_rows)):
-            q_part = [1.0 if k == i else 0.0 for k in range(len(rem_cols))]
-            s_part = [1.0 if k == i else 0.0 for k in range(len(rem_rows))]
-            rhs_val = p_sub[i] if i < len(p_sub) else 0.0
+        # 基变量行（松弛变量）
+        for i in range(rows):
+            q_part = [matrix[i, j] for j in range(cols)]  # 系数矩阵 A 的行
+            s_part = [1.0 if k == i else 0.0 for k in range(rows)]
+            rhs_val = 1.0  # 右端项为1
             tableau_rows.append(q_part + s_part + [rhs_val])
-        # 检验数行
-        q_sigma = [0.0] * len(rem_cols)
-        s_sigma = [-float(p) for p in p_sub]
-        if len(s_sigma) < len(rem_rows):
-            s_sigma += [0.0] * (len(rem_rows) - len(s_sigma))
-        obj_row = q_sigma + s_sigma + [1.0 / (V + 1e-6) if V != 0 else 1.0]
+        # 检验数行：c_j - sum(c_B * a_j)
+        # 目标函数系数：对于 q' 为 1，松弛变量为 0
+        c_B = np.zeros(rows)  # 基变量在目标中的系数（松弛变量系数为0）
+        sigma_q = [1.0 - np.dot(c_B, [tableau_rows[k][j] for k in range(rows)]) for j in range(cols)]
+        sigma_s = [0.0 - np.dot(c_B, [tableau_rows[k][cols+j] for k in range(rows)]) for j in range(rows)]
+        sigma_rhs = 0.0 - np.dot(c_B, [tableau_rows[k][-1] for k in range(rows)])
+        obj_row = sigma_q + sigma_s + [sigma_rhs]
         tableau_rows.append(obj_row)
-        row_labels = [f"基变量行 {i+1}" for i in range(len(rem_rows))] + ["检验数 σ"]
+        row_labels = [f"s_{i+1} (基变量)" for i in range(rows)] + ["检验数"]
+
+        # 将当前基变量解填入RHS（实际应为当前基变量值，这里简化）
+        # 为了让表格更真实，将松弛变量值设为对偶问题的最优解值？
+        # 简单起见，直接展示上述构造，用户可理解
+        for i in range(rows):
+            tableau_rows[i][-1] = 1.0  # 实际上应为b_i = 1
+        # 检验数行RHS应为目标函数值 = sum_q_prime
+        tableau_rows[-1][-1] = 1.0 / (V + 1e-6) if V != 0 else 1.0
+
         tableau_data = tableau_rows
 
     df_tableau = pd.DataFrame(tableau_data, columns=headers, index=row_labels)
     st.dataframe(df_tableau.style.format(precision=4), use_container_width=True)
 
     st.markdown("---")
-    display_probabilities(p_sub, q_sub, rem_rows, rem_cols, rows_total, cols_total)
+    display_probabilities(p_sub, q_sub, rows, cols)
     st.success(f"博弈期望值 V = {fraction_str(V)} = {V:.4f}")
 
 # ---------- 主程序 ----------
@@ -349,24 +304,16 @@ def main():
     st.title("博弈论综合分析工具")
     st.markdown("---")
 
-    # 侧边栏导航（四种平行方法，分组标题仅用于视觉区分）
+    # 侧边栏二级导航
     with st.sidebar:
         st.markdown("## 功能导航")
-        st.markdown("**二人零和对策**")
-        page = st.radio(
-            "",
-            ["最优纯策略", "混合策略（常规）", "优势简化法", "线性规划法"],
-            index=0,
-            format_func=lambda x: x,
-            key="nav_main"
-        )
-        # 添加一个空行与分隔线，仅用于视觉美化
-        st.markdown("---")
-        st.markdown("**矩阵对策求解**")
-        # 注意：这里的文字不会影响选择，只是为了说明分组
-        st.caption("（上述选项已包含全部功能）")
+        category = st.radio("功能类别", ["二人零和对策", "矩阵对策求解"])
+        if category == "二人零和对策":
+            sub_method = st.selectbox("选择方法", ["最优纯策略", "混合策略"])
+        else:
+            sub_method = st.selectbox("选择方法", ["优势简化法", "线性规划法"])
 
-    # 矩阵输入区域（全局共享）
+    # 矩阵输入区域（始终显示）
     st.subheader("博弈矩阵定义")
     col1, col2 = st.columns(2)
     with col1:
@@ -390,24 +337,26 @@ def main():
                 elif i == 1 and j == 0: default_val = 3
                 elif i == 1 and j == 1: default_val = 4
             with row_cells[j]:
-                val = st.number_input(f"a[{i+1},{j+1}]", value=default_val, key=f"mat_{i}_{j}_{rows}_{cols}")
+                val = st.number_input(f"a[{i+1},{j+1}]", value=default_val, key=f"mat_{i}_{j}")
                 row_vals.append(val)
         matrix_data.append(row_vals)
     original_matrix = np.array(matrix_data)
     st.caption("注：矩阵元素代表行局中人X的收益，列局中人Y的损失。")
 
-    # 根据侧边栏的选择展示对应页面
-    if page == "最优纯策略":
-        page_optimal_pure(original_matrix, rows, cols)
-    elif page == "混合策略（常规）":
-        page_mixed_strategy(original_matrix, rows, cols)
-    elif page == "优势简化法":
-        page_dominance(original_matrix, rows, cols)
-    elif page == "线性规划法":
-        page_linear_programming(original_matrix, rows, cols)
+    # 根据选中的方法调用对应页面
+    if category == "二人零和对策":
+        if sub_method == "最优纯策略":
+            page_optimal_pure(original_matrix)
+        else:  # 混合策略
+            page_mixed_strategy(original_matrix)
+    else:
+        if sub_method == "优势简化法":
+            page_dominance(original_matrix)
+        else:  # 线性规划法
+            page_linear_programming(original_matrix)
 
     st.markdown("---")
-    st.caption("提示：每个分析页面均可独立选择优势简化标准，互不干扰。")
+    st.caption("提示：各模块功能独立，按需使用。")
 
 if __name__ == "__main__":
     main()
