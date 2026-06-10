@@ -137,61 +137,7 @@ def weak_dominance_simplify(matrix):
         history_log.append("未发现可剔除的弱劣势策略。")
     return reduced_matrix, remaining_rows, remaining_cols, history_log
 
-# ---------- 各功能页面 ----------
-def page_optimal_pure(matrix):
-    st.header("最优纯策略分析")
-    has_saddle, saddles, max_min, min_max = saddle_point_analysis(matrix)
-
-    st.markdown("#### 鞍点检验")
-    # 修正 f-string 中的大括号转义：需要输出字面大括号的地方使用双大括号
-    st.latex(f"\\text{{Max-Min}} = \\max_i \\min_j a_{{ij}} = {max_min:.2f}")
-    st.latex(f"\\text{{Min-Max}} = \\min_j \\max_i a_{{ij}} = {min_max:.2f}")
-
-    if has_saddle:
-        st.success("存在纯策略纳什均衡（鞍点）")
-        for idx, (x, y, val) in enumerate(saddles):
-            st.info(f"鞍点 {idx+1}：X 选择 X{x}，Y 选择 Y{y}，博弈值 V = {val:.2f}")
-    else:
-        st.warning("不存在纯策略鞍点，建议使用混合策略求解。")
-
-def page_mixed_strategy(matrix):
-    st.header("混合策略求解（常规方程组法）")
-    rows, cols = matrix.shape
-    p_sub, q_sub, V, is_textbook = compute_mixed_strategy(matrix)
-    if p_sub is None:
-        st.error("求解失败，请检查矩阵数据。")
-        return
-
-    # 动态生成字母表示概率
-    x_vars = get_letter_vars(rows)
-    y_vars = get_letter_vars(cols)
-
-    st.markdown("#### 期望收益方程组推导")
-    st.write(f"设局中人 X 采用各策略的概率分别为 {', '.join(x_vars)}，")
-    st.write(f"局中人 Y 采用各策略的概率分别为 {', '.join(y_vars)}。")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**X 的概率求解 (令 Y 的每个纯策略下 X 的期望收益相等)**")
-        for j in range(cols):
-            terms = [f"{matrix[i, j]:.1f}{x_vars[i]}" for i in range(rows)]
-            st.latex(f"E(Y_{{{j+1}}}) = " + " + ".join(terms) + " = V")
-        st.write(f"结合 $\\sum " + " + ".join(x_vars) + " = 1$ 解得：")
-        for i in range(rows):
-            st.info(f"{x_vars[i]} = {fraction_str(p_sub[i])}")
-    with col2:
-        st.markdown("**Y 的概率求解 (令 X 的每个纯策略下 Y 的期望损失相等)**")
-        for i in range(rows):
-            terms = [f"{matrix[i, j]:.1f}{y_vars[j]}" for j in range(cols)]
-            st.latex(f"E(X_{{{i+1}}}) = " + " + ".join(terms) + " = V")
-        st.write(f"结合 $\\sum " + " + ".join(y_vars) + " = 1$ 解得：")
-        for j in range(cols):
-            st.info(f"{y_vars[j]} = {fraction_str(q_sub[j])}")
-
-    st.markdown("---")
-    display_probabilities(p_sub, q_sub, rows, cols)
-    st.success(f"博弈期望值 V = {fraction_str(V)} = {V:.4f}")
-
+# ---------- 功能页面 ----------
 def page_dominance(matrix):
     st.header("优势简化法分析")
     reduced_mat, rem_rows, rem_cols, log = weak_dominance_simplify(matrix)
@@ -220,7 +166,6 @@ def page_dominance(matrix):
 
     if has_saddle:
         st.success("简化后的矩阵存在纯策略纳什均衡（鞍点）")
-        # 将鞍点坐标映射回原始策略编号（saddle_point_analysis返回的坐标是1-indexed）
         for idx, (r, c, val) in enumerate(saddles):
             orig_r = rem_rows[r-1] + 1
             orig_c = rem_cols[c-1] + 1
@@ -363,14 +308,10 @@ def main():
     st.title("博弈论综合分析工具")
     st.markdown("---")
 
-    # 侧边栏二级导航
+    # 侧边栏导航：仅保留两种方法
     with st.sidebar:
         st.markdown("## 功能导航")
-        category = st.radio("功能类别", ["二人零和对策", "矩阵对策求解"])
-        if category == "二人零和对策":
-            sub_method = st.selectbox("选择方法", ["最优纯策略", "混合策略"])
-        else:
-            sub_method = st.selectbox("选择方法", ["优势简化法", "线性规划法"])
+        method = st.selectbox("选择方法", ["优势简化法", "线性规划法"])
 
     # 矩阵输入区域（始终显示）
     st.subheader("博弈矩阵定义")
@@ -403,16 +344,10 @@ def main():
     st.caption("注：矩阵元素代表行局中人X的收益，列局中人Y的损失。")
 
     # 根据选中的方法调用对应页面
-    if category == "二人零和对策":
-        if sub_method == "最优纯策略":
-            page_optimal_pure(original_matrix)
-        else:  # 混合策略
-            page_mixed_strategy(original_matrix)
-    else:
-        if sub_method == "优势简化法":
-            page_dominance(original_matrix)
-        else:  # 线性规划法
-            page_linear_programming(original_matrix)
+    if method == "优势简化法":
+        page_dominance(original_matrix)
+    else:  # 线性规划法
+        page_linear_programming(original_matrix)
 
     st.markdown("---")
     st.caption("提示：各模块功能独立，按需使用。")
